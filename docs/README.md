@@ -1,6 +1,8 @@
 # DNA-BERT
 DNA (16S gene) Classification with DistilBERT
 
+<img src="bert_dna.png" width="250" />
+
 # Initial Installation 
 ```
 # clone the project
