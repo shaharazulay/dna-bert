@@ -24,12 +24,15 @@ class KmerTokenizer(object):
 
 		self._pad_len = None
 
-	def encode(self, kmers: List[str]) -> List[int]:
+	def encode(self, kmers: List[str], add_special_tokens=True) -> List[int]:
 		"""
 		encode a list of kmers (k-length strings) into a list of token ids using the vocab.
 		"""
 		tokens = [self._vocab[kmer] for kmer in kmers]
-		tokens_with_special = [self._vocab['[CLS]']] + tokens + [self._vocab['[SEP]']]
+		if add_special_tokens:
+			tokens_with_special = [self._vocab['[CLS]']] + tokens + [self._vocab['[SEP]']]
+		else:
+			tokens_with_special = tokens
 
 		if self._pad_len is not None:
 			tokens_truncated = tokens_with_special[:self._pad_len]
