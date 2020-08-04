@@ -1,5 +1,5 @@
 # DNA-BERT
-DNA (16S gene) Classification with DistilBERT
+DNA (16S gene) Classification with BERT
 
 <img src="bert_dna.png" width="250" />
 
