@@ -9,6 +9,7 @@ from transformers import BertModel
 
 
 from _dataset import BERT16SDataset
+from _kmers import BERT16SKmerDataset
 
 
 class BertClassifier(nn.Module):
@@ -16,23 +17,23 @@ class BertClassifier(nn.Module):
 	Bert Model with an additional simple classification head.
 	Can be used to fine tune BERT's [CLS] output for text classification tasks.
 	:param path: str, path to pre-trained BERT model.
+	:param num_classes: the number of output classes.
 	:param freeze_bert: bool, True if BERT's weights are frozen. Set `False` to fine-tune the BERT model
 	"""
 
-	def __init__(self, path, freeze_bert=False):
+	def __init__(self, path, num_classes, freeze_bert=False):
 
 		super(BertClassifier, self).__init__()
 		# specify hidden size of BERT, hidden size of the classifier, and number of output labels
-		D_in, H, D_out = 256, 100, 2
+		D_in, H, D_out = 256, 1000, num_classes
 
 		# load BERT model
-		self.bert = BertModel.from_pretrained(path)
+		self.bert = BertModel.from_pretrained(path).train()
 
 		# declare a one-layer classifier
 		self.classifier = nn.Sequential(
 			nn.Linear(D_in, H),
-			nn.ReLU(),
-			# nn.Dropout(0.5),
+			nn.LeakyReLU(),
 			nn.Linear(H, D_out)
 		)
 
@@ -48,8 +49,8 @@ class BertClassifier(nn.Module):
 		"""
 		embeddings = self.bert.embeddings(batch)
 
-		# extract the last hidden state of the token `[CLS]` for classification task
-		embeddings_cls = embeddings[:, 0, :]
+		# extract the average of the last hidden state for classification task
+		embeddings_cls = embeddings.mean(dim=1)
 
 		# feed input to classifier to compute logits
 		logits = self.classifier(embeddings_cls)
@@ -74,7 +75,17 @@ class GeneratePhylumLabels(object):
 
 	def _generate_labels(self):
 		self._group_rare_phylum()
-		self._16s_corpus_df['label'] = preprocessing.LabelEncoder().fit_transform(self._16s_corpus_df['phylum'])
+		label_encoder = preprocessing.LabelEncoder().fit(self._16s_corpus_df['phylum'])
+		self._16s_corpus_df['label'] = label_encoder.transform(self._16s_corpus_df['phylum'])
+		self._other_label = label_encoder.transform(['other'])
+
+	@property
+	def other_label(self):
+		return self._other_label
+
+	@property
+	def num_classes(self):
+		return self._16s_corpus_df['label'].nunique()
 
 	def save(self, path):
 		self._16s_corpus_df.to_csv(path, sep='\t')
@@ -114,3 +125,20 @@ class BERT16SDatasetForPhylaClassification(BERT16SDataset):
 		label = torch.tensor([self.labels[i]])
 		return input_ids, label
 
+
+class BERT16SKmerDatasetForPhylaClassification(BERT16SKmerDataset):
+	"""
+	A torch dataset class designed to load a 16S data found in a tsv file and encode it for BERT using k-mer tokenization.
+	:param vocab_path: str, path to the pre-trained bert tokenizer vocab file.
+	:param data_path: str, path to the 16S data file.
+	:param block_size: str, maximal BERT input (an encoded sample will be padded to this length if too short)
+	:param k: int, he k-mer size to use.
+	"""
+	def __init__(self, vocab_path: str, data_path: str, block_size=512, k=6):
+		super(BERT16SKmerDatasetForPhylaClassification, self).__init__(vocab_path, data_path, block_size=block_size, k=k)
+		self.labels = self._16s_corpus_df['label'].values.tolist()
+
+	def __getitem__(self, i):
+		input_ids = super(BERT16SKmerDatasetForPhylaClassification, self).__getitem__(i)
+		label = torch.tensor([self.labels[i]])
+		return input_ids, label
